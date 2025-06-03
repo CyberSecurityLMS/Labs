@@ -6,6 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from enum import Enum
 import shutil
 from fastapi.responses import FileResponse
+from py_eureka_client import eureka_client
+
+import os
 
 
 class LabName(str, Enum):
@@ -15,16 +18,6 @@ class LabName(str, Enum):
     security_misconfiguration_lab = "security_misconfiguration_lab"
     insecure_design_lab = "insecure_design_lab"
     security_logging_failures_lab = "security_logging_failures_lab"
-    C01_vulnerable_dependencies_lab = "C01_vulnerable_dependencies_lab"
-    C02_access_control_lab = "C02_access_control_lab"
-    C03_file_handling_lab = "C03_file_handling_lab",
-    C04_insufficient_authentication_lab = "C04_insufficient_authentication_lab",
-    C05_code_injection_lab = "C05_code_injection_lab",
-    C06_command_injection_lab = "C06_command_injection_lab",
-    C07_weak_cryptography_lab = "C07_weak_cryptography_lab",
-    C08_privilege_escalation_lab = "C08_privilege_escalation_lab",
-    C09_authentication_bypass_lab = "C09_authentication_bypass_lab",
-    C10_race_conditions_lab = "C10_race_conditions_lab",
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -41,6 +34,9 @@ app.mount("/static", NoCacheStaticFiles(directory="labs_src"), name="labs")
 UPLOAD_DIR = Path("labs_src/app/student_code")
 SRC_DIR = Path("labs_src/app/student_code_src")
 
+EUREKA_URL = os.environ.get("EUREKA_URL", "http://discovery-server:8761/eureka")
+APP_NAME = os.environ.get("APP_NAME", "labs-module")
+
 origins = ["*"]
 
 app.add_middleware(
@@ -50,6 +46,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        eureka_client.init_async(
+            eureka_server=EUREKA_URL,
+            app_name=APP_NAME,
+            instance_port=8000
+        )
+    except RuntimeWarning:
+        print('Could not connect to Eureka')
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    eureka_client.stop()
 
 
 @app.post("/upload")
